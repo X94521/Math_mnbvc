@@ -5,7 +5,7 @@ from pathlib import Path
 from functional import seq
 
 from data_types import QaData, MetaData, Session, ForumQaData, ForumResponse, ForumMetaData
-from typing import List
+from typing import List, Dict
 from hashlib import md5
 import logging
 
@@ -18,7 +18,13 @@ class MathProcess:
         self.idx = 0
 
     @staticmethod
-    def read_file(file_path, file_type):
+    def read_file(file_path: str, file_type: str):
+        """读取不同的数据文件，返回数据迭代器
+
+        Args:
+            file_path (str): 输入数据文件目录
+            file_type (str): 文件格式, 可以是json, jsonl
+        """
         if 'MATH' in file_path:
             return [json.load(open(file_path))]
         elif "math23k" in file_path:
@@ -55,7 +61,14 @@ class MathProcess:
         elif file_type == 'json':
             return seq.json(file_path)
     
-    def read_corpus(self, input_dir, file_type, end_name):
+    def read_corpus(self, input_dir: str, file_type: str, end_name: str):
+        """遍历目录, 读取所有后缀名为 end_name 的文件, 返回数据迭代器
+
+        Args:
+            input_dir (str): 输入数据目录
+            file_type (str): 数据格式, 例如json
+            end_name (str): 文件后缀名, 如果为空, 则令end_name等于file_type
+        """
         if end_name is None:
             end_name = file_type
         for file_path in Path(input_dir).iterdir():
@@ -76,7 +89,21 @@ class MathProcess:
             .map(lambda x: json.dumps(x.dict(), ensure_ascii=False))\
             .to_file(save_path, delimiter='\n', encoding='utf-8')
     
-    def process2stream(self, input_dir, file_type, end_name, process_engine, dataset):
+    def process2stream(
+        self, 
+        input_dir: str, 
+        file_type: str, 
+        end_name: str, 
+        process_engine: str, 
+    ):
+        """数据处理流, 针对不同的数据格式，调用不同的数据engine
+
+        Args:
+            input_dir (str): 输入数据目录
+            file_type (str): 数据格式, 例如json
+            end_name (str): 文件后缀名, 如果为空, 则令end_name等于file_type
+            process_engine : 数据处理 engine, 每一个不同的源数据格式都有一个不同的 engine
+        """
         stream = seq(self.read_corpus(input_dir, file_type, end_name))\
             .map(process_engine)\
             .filter(lambda x: x is not None)\
@@ -85,7 +112,12 @@ class MathProcess:
             .map(lambda x: json.dumps(x.dict(), ensure_ascii=False))
         return stream
     
-    def ape210k_engine(self, line):
+    def ape210k_engine(self, line: Dict):
+        """ape210k 数据处理 engine, 输入一条源数据, 输出目标数据
+
+        Args:
+            line (Dict): ape210k 数据集中的一条数据
+        """
         uid = self.idx
         self.idx += 1
         question = line['original_text']
@@ -279,6 +311,8 @@ class MathProcess:
 
 
     def run(self, engine_map, save_file):
+        """数据处理总入口, 处理完数据写入到save_file中
+        """
         f_out = open(f'processed/{save_file}', 'w', encoding='utf-8')
         for dataset, info in engine_map.items():
             # if dataset in ["ape210k", "dolphin_number_word_std", "goat", "grade_school_math", "math", "math23k", "mathematics"]:
